@@ -1,0 +1,3 @@
+dataclasses
+robomasterpy
+opencv-contrib-python
