@@ -1,3 +1,9 @@
 dataclasses
 robomasterpy
+click
+numpy
 opencv-contrib-python
+pynput
+python-xlib
+simple-pid
+six
