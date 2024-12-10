@@ -1,5 +1,4 @@
 dataclasses
-robomasterpy
 click
 numpy
 opencv-contrib-python
