@@ -5,17 +5,20 @@ import logging
 import multiprocessing as mp
 import pickle
 import queue
-import threading
+
+# import threading
 from typing import Tuple, List
 import numpy as np
 import click
 import cv2 as cv
 import robomasterpy as rm
-from pynput import keyboard
-from pynput.keyboard import Key, KeyCode
+
+# from pynput import keyboard
+# from pynput.keyboard import Key, KeyCode
 from robomasterpy import CTX
 from robomasterpy import framework as rmf
-from pynput.keyboard import Controller
+
+# from pynput.keyboard import Controller
 import time
 
 rm.LOG_LEVEL = logging.INFO
@@ -192,6 +195,7 @@ def handle_event(
 def cli(ip: str, timeout: float):
     # manager is in charge of communicating among processes
     manager: mp.managers.SyncManager = CTX.Manager()
+    tracker = TargetTracker()
     global delta_x, delta_y
     with manager:
         # hub is the place to register your logic
@@ -207,9 +211,7 @@ def cli(ip: str, timeout: float):
         cmd.stream(True)
         # rm.Vision is a handler for video streaming
         # display is the callback function defined above
-        tracker = TargetTracker()
         hub.worker(rmf.Vision, "vision", (None, ip, tracker.display))
-        tracker.follow_target()
 
         # enable push and event
         cmd.chassis_push_on(PUSH_FREQUENCY, PUSH_FREQUENCY, PUSH_FREQUENCY)
@@ -239,135 +241,9 @@ def cli(ip: str, timeout: float):
 
         # Let's do this!
         hub.run()
+    while True:
+        tracker.follow_target()
 
 
 if __name__ == "__main__":
     cli()
-
-    def stop_program():
-        cv.destroyAllWindows()
-        exit(0)
-
-    # class Controller:
-    #     # existing code...
-
-    #     def on_press(self, key):
-    #         with self._mu:
-    #             self.logger.debug("pressed: %s", key)
-
-    #             if key == Key.esc:
-    #                 stop_program()
-    #                 return
-    #             # existing code...
-
-    #     # existing code...
-
-
-class Controller:
-    UNIT_DELTA_SPEED: float = 0.2
-    UNIT_DELTA_DEGREE: float = 20
-
-    def __init__(self, cmd: rm.Commander, logger: logging.Logger):
-        self._mu = threading.Lock()
-        with self._mu:
-            self.gear: int = 1
-            self.delta_v: float = self.UNIT_DELTA_SPEED
-            self.delta_d: float = self.UNIT_DELTA_DEGREE
-            self.cmd = cmd
-            self.logger = logger
-            self.v: List[float, float] = [0, 0]
-            self.previous_v: List[float, float] = [0, 0]
-            self.v_gimbal: List[float, float] = [0, 0]
-            self.previous_v_gimbal: List[float, float] = [0, 0]
-            self.ctrl_pressed: bool = False
-
-    def on_press(self, key):
-        with self._mu:
-            self.logger.debug("pressed: %s", key)
-
-            if key == Key.ctrl:
-                self.ctrl_pressed = True
-                return
-            if self.ctrl_pressed and key == KeyCode(char="c"):
-                # stop listener
-                self.v = [0, 0]
-                self.v_gimbal = [0, 0]
-                self.send_command()
-                return False
-            if key == Key.space:
-                self.cmd.blaster_fire()
-                return
-
-            if key == KeyCode(char="w"):
-                self.v[0] = self.delta_v
-            elif key == KeyCode(char="s"):
-                self.v[0] = -self.delta_v
-            elif key == KeyCode(char="a"):
-                self.v[1] = -self.delta_v
-            elif key == KeyCode(char="d"):
-                self.v[1] = self.delta_v
-            elif key == Key.up:
-                self.v_gimbal[0] = self.delta_d
-            elif key == Key.down:
-                self.v_gimbal[0] = -self.delta_d
-            elif key == Key.left:
-                self.v_gimbal[1] = -self.delta_d
-            elif key == Key.right:
-                self.v_gimbal[1] = self.delta_d
-
-            self.send_command()
-
-    def _update_gear(self, gear: int):
-        self.gear = gear
-        self.delta_v = self.gear * self.UNIT_DELTA_SPEED
-        self.delta_d = self.gear * self.UNIT_DELTA_DEGREE
-
-    def on_release(self, key):
-        with self._mu:
-            self.logger.debug("released: %s", key)
-
-            if key == Key.ctrl:
-                self.ctrl_pressed = False
-                return
-
-            # gears
-            if key in (
-                KeyCode(char="1"),
-                KeyCode(char="2"),
-                KeyCode(char="3"),
-                KeyCode(char="4"),
-                KeyCode(char="5"),
-            ):
-                self._update_gear(int(key.char))
-                return
-
-            if key in (KeyCode(char="w"), KeyCode(char="s")):
-                self.v[0] = 0
-            elif key in (KeyCode(char="a"), KeyCode(char="d")):
-                self.v[1] = 0
-            elif key in (Key.up, Key.down):
-                self.v_gimbal[0] = 0
-            elif key in (Key.left, Key.right):
-                self.v_gimbal[1] = 0
-
-            self.send_command()
-
-    def send_command(self):
-        if self.v != self.previous_v:
-            self.previous_v = [*self.v]
-            self.logger.debug("chassis speed: x: %s, y: %s", self.v[0], self.v[1])
-            self.cmd.chassis_speed(self.v[0], self.v[1], 0)
-        if self.v_gimbal != self.previous_v_gimbal:
-            self.logger.debug(
-                "gimbal speed: pitch: %s, yaw: %s", self.v_gimbal[0], self.v_gimbal[1]
-            )
-            self.previous_v_gimbal = [*self.v_gimbal]
-            self.cmd.gimbal_speed(self.v_gimbal[0], self.v_gimbal[1])
-
-
-def control(cmd: rm.Commander, logger: logging.Logger, **kwargs) -> None:
-    controller = Controller(cmd, logger)
-    with keyboard.Listener(
-        on_press=controller.on_press, on_release=controller.on_release
-    ) as listener:
-        listener.join()
