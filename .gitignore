@@ -1,6 +1,8 @@
 # Hidden Files
 *.json
 
+*.avi
+*.mov
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
