@@ -6,3 +6,6 @@ pynput
 python-xlib
 simple-pid
 six
+vidstab[cv2]
+pandas
+openpyxl
